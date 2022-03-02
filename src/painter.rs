@@ -1,18 +1,15 @@
 #![allow(unsafe_code)]
 
-use std::{collections::HashMap, borrow::Borrow};
+use std::collections::HashMap;
 
-use egui::{
-    emath::Rect,
-    epaint::{Mesh, Vertex},
-};
+use egui::epaint::{Mesh, Vertex};
 use glow::{HasContext, NativeTexture};
 use memoffset::offset_of;
-use xplm::debugln;
 
-use crate::{misc_util::{
-    as_u8_slice, compile_shader, link_program, srgbtexture2d, texture_from_raw_id,
-}, check_gl_error};
+use crate::{
+    check_gl_error,
+    misc_util::{as_u8_slice, compile_shader, link_program, srgbtexture2d},
+};
 
 pub use glow::Context;
 
@@ -197,7 +194,12 @@ impl Painter {
         let width_in_points = width_in_pixels as f32 / pixels_per_point;
         let height_in_points = height_in_pixels as f32 / pixels_per_point;
 
-        gl.viewport(window.left(), window.bottom(), width_in_pixels, height_in_pixels);
+        gl.viewport(
+            window.left(),
+            window.bottom(),
+            width_in_pixels,
+            height_in_pixels,
+        );
         check_gl_error(gl, "while setting viewport");
         gl.use_program(Some(self.program));
         check_gl_error(gl, "while binding program");
@@ -252,10 +254,7 @@ impl Painter {
         self.assert_not_destroyed();
 
         let size_in_pixels = unsafe { self.prepare_painting(inner_size, gl, pixels_per_point) };
-        debugln!("{inner_size:?},{size_in_pixels:?}");
         for egui::ClippedMesh(clip_rect, mesh) in clipped_meshes {
-            debugln!("{clip_rect:?}");
-
             self.paint_mesh(gl, size_in_pixels, &inner_size, &mesh);
         }
         check_gl_error(gl, "while painting");

@@ -1,9 +1,8 @@
-use std::sync::mpsc::Receiver;
-
-use egui::{ClippedMesh, Pos2, RawInput, Rect};
-use painter::Painter;
-use xplm::{data::{borrowed::DataRef, ArrayRead}, debugln};
+use egui::{ClippedMesh, output::OutputEvent};
+use input::XplmInputState;
 pub use misc_util::check_gl_error;
+use painter::Painter;
+use xplm::data::{borrowed::DataRef, ArrayRead};
 
 mod input;
 mod misc_util;
@@ -12,38 +11,39 @@ mod painter;
 pub struct XplmGui {
     ctx: egui::CtxRef,
     painter: Painter,
-    gathered_input: RawInput,
+    pub input_state: XplmInputState, //TODO proper abstraction
     clipped_meshes: Vec<ClippedMesh>,
     viewport: DataRef<[i32]>,
+    has_keyboard_focus: bool,
 }
 
 impl XplmGui {
     pub fn new(gl: &glow::Context) -> Result<Self, String> {
-        let mut ctx = Default::default();
         Ok(Self {
-            ctx,
+            ctx: Default::default(),
             painter: Painter::new(gl)?,
-            gathered_input: Default::default(),
+            input_state: Default::default(),
             clipped_meshes: vec![],
             viewport: DataRef::find("sim/graphics/view/viewport").unwrap(),
+            has_keyboard_focus: false,
         })
     }
-    pub fn update(&mut self, run_ui: impl FnOnce(&egui::CtxRef)) {
+    pub fn update(&mut self, window: &xplm::window::Window, run_ui: impl FnOnce(&egui::CtxRef)) {
         let input = self.gather_input();
         let (output, shapes) = self.ctx.run(input, run_ui);
+        if !self.has_keyboard_focus && self.ctx.wants_keyboard_input() {
+            window.take_keyboard_focus()
+        } 
+        if self.has_keyboard_focus && !self.ctx.wants_keyboard_input() {
+            window.loose_keyboard_focus()
+        } 
+        handle_output(window, output);
         self.clipped_meshes = self.ctx.tessellate(shapes);
     }
 
     pub fn draw(&mut self, window: &xplm::window::Window, gl: &glow::Context) {
         self.painter.upload_egui_texture(gl, &self.ctx.font_image());
         let w_geo = window.geometry();
-        //self.gathered_input.append(RawInput {
-        //    screen_rect: Some(Rect::from_min_max(
-        //        Pos2::new(w_geo.left() as f32, w_geo.bottom() as f32),
-        //        Pos2::new(w_geo.right() as f32, w_geo.top() as f32),
-        //    )),
-        //    ..Default::default()
-        //});
         let mut viter = self.viewport.as_vec().into_iter();
         let viewport = [
             viter.next().unwrap(),
@@ -55,34 +55,21 @@ impl XplmGui {
             .paint_meshes(gl, w_geo, viewport, 1.0, &self.clipped_meshes);
     }
 
-    fn keyboard_event(&mut self, _window: &xplm::window::Window, _event: xplm::window::KeyEvent) {}
+}
 
-    fn mouse_event(
-        &mut self,
-        _window: &xplm::window::Window,
-        _event: xplm::window::MouseEvent,
-    ) -> bool {
-        true
-    }
-
-    fn scroll_event(
-        &mut self,
-        _window: &xplm::window::Window,
-        _event: xplm::window::ScrollEvent,
-    ) -> bool {
-        true
-    }
-
-    fn cursor(
-        &mut self,
-        _window: &xplm::window::Window,
-        _position: xplm::geometry::Point<i32>,
-    ) -> xplm::window::Cursor {
-        xplm::window::Cursor::Default
+fn handle_output(window: &xplm::window::Window, output: egui::Output) {
+    for event in output.events {
+        match event {
+            OutputEvent::FocusGained(_) => {
+                window.take_keyboard_focus()
+            }
+            _ => ()
+        }
     }
 }
+
 impl XplmGui {
     fn gather_input(&mut self) -> egui::RawInput {
-        self.gathered_input.take()
+        self.input_state.take_egui_input()
     }
 }
