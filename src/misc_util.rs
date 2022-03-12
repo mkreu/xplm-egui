@@ -2,11 +2,6 @@
 use glow::{HasContext, NativeTexture};
 use xplm::debugln;
 
-pub(crate) fn texture_from_raw_id(id: i32) -> glow::NativeTexture {
-    assert!(id > 0, "texture id must be a positive unsigned int");
-    unsafe { std::mem::transmute(id) }
-}
-
 pub(crate) fn srgbtexture2d(gl: &glow::Context, data: &[u8], w: usize, h: usize) -> NativeTexture {
     assert_eq!(data.len(), w * h * 4);
     assert!(w >= 1);

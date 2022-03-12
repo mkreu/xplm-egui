@@ -8,7 +8,13 @@ mod input;
 mod misc_util;
 mod painter;
 
-pub struct XplmGui {
+pub fn init_gl_context() -> glow::Context {
+        gl_loader::init_gl();
+        unsafe {glow::Context::from_loader_function(|f| gl_loader::get_proc_address(f) as _) }
+}
+
+pub struct XplmGuiContext {
+    gl: glow::Context,
     ctx: egui::CtxRef,
     painter: Painter,
     pub input_state: XplmInputState, //TODO proper abstraction
@@ -17,11 +23,14 @@ pub struct XplmGui {
     has_keyboard_focus: bool,
 }
 
-impl XplmGui {
-    pub fn new(gl: &glow::Context) -> Result<Self, String> {
+impl XplmGuiContext {
+    pub fn new() -> Result<Self, String> {
+        let gl = init_gl_context();
+        let painter = Painter::new(&gl)?;
         Ok(Self {
+            gl,
+            painter,
             ctx: Default::default(),
-            painter: Painter::new(gl)?,
             input_state: Default::default(),
             clipped_meshes: vec![],
             viewport: DataRef::find("sim/graphics/view/viewport").unwrap(),
@@ -41,8 +50,8 @@ impl XplmGui {
         self.clipped_meshes = self.ctx.tessellate(shapes);
     }
 
-    pub fn draw(&mut self, window: &xplm::window::Window, gl: &glow::Context) {
-        self.painter.upload_egui_texture(gl, &self.ctx.font_image());
+    pub fn draw(&mut self, window: &xplm::window::Window) {
+        self.painter.upload_egui_texture(&self.gl, &self.ctx.font_image());
         let w_geo = window.geometry();
         let mut viter = self.viewport.as_vec().into_iter();
         let viewport = [
@@ -52,7 +61,7 @@ impl XplmGui {
             viter.next().unwrap(),
         ];
         self.painter
-            .paint_meshes(gl, w_geo, viewport, 1.0, &self.clipped_meshes);
+            .paint_meshes(&self.gl, w_geo, viewport, 1.0, &self.clipped_meshes);
     }
 
 }
@@ -68,7 +77,7 @@ fn handle_output(window: &xplm::window::Window, output: egui::Output) {
     }
 }
 
-impl XplmGui {
+impl XplmGuiContext {
     fn gather_input(&mut self) -> egui::RawInput {
         self.input_state.take_egui_input()
     }
